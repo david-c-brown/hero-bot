@@ -1,7 +1,6 @@
-# this script is computationally expensive, so for the most part we are only importing what we need from each library
 from time import time
 import asyncio
-from num2words import num2words
+from num2words import num2words # this is for my cheeky moby dick quotes, specifically loop counter
 import pyautogui as pg
 import constant_vars as cvars
 from random import uniform, sample, randint
@@ -12,22 +11,7 @@ from win32con import MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_LE
 from os import _exit
 from math import floor
 
-center = {"x":floor(cvars.wincap.offset_x + cvars.wincap.w * .5), "y":floor(cvars.wincap.offset_y + cvars.wincap.h*.5)}
-iteration = 1
-background_tasks = set()
-top = {"x": center["x"], "y": center["y"] - 115 + iteration}
-top_right = {"x": center["x"] + 115 + iteration, "y": center["y"] - 125 - iteration}
-right = {"x": center["x"] + 125 + iteration, "y": center["y"]}
-bottom_right = {"x": center["x"] + 135 + iteration, "y": center["y"] + 135 + iteration}
-bottom = {"x": center["x"], "y": center["y"] + 145 + iteration}
-bottom_left = {"x": center["x"] - 145 - iteration, "y": center["y"] + 155 + iteration}
-left = {"x": center["x"] - 155 - iteration, "y": center["y"]}
-top_left = {"x": center["x"] - 165 - iteration, "y": center["y"] - 165 - iteration}
-direction = [top, top_right, right, bottom_right, bottom, bottom_left, left, top_left]
-
-target = {"x": cvars.wincap.offset_x, "y": cvars.wincap.offset_y + 5}
-get_off_wp = {"x": center["x"], "y" : center["y"] - 70}
-
+# defining clicks for async operations. using pyautogui had some performance weirdness
 async def left_click(x, y, hold_time = 0.1):
     SetCursorPos((x, y))
     mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0)
@@ -49,6 +33,9 @@ async def click_click(x, y, hold_time):
     mouse_event(MOUSEEVENTF_LEFTUP, 0, 0)
     mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0)
 
+# here is how we control the character
+# because the maps and monster groups are randomly generated, we go with a simple circular exploration
+
 async def radial_movement(x,y, hold_time):
     await click_click(x, y, hold_time)
     press('f', interval = .5, presses = floor(hold_time*2))
@@ -62,6 +49,7 @@ async def widening_circle(number_of_seconds):
         iteration += 25
     return 0
 
+# this function I'm not too sure on keeping. the original intent was to try and pick up any loot left behind, but i think there are probably better solutions
 async def shrinking_circle(number_of_seconds):
     t_end = time() + number_of_seconds
     iteration = 1
@@ -71,25 +59,7 @@ async def shrinking_circle(number_of_seconds):
         iteration += 1
     return 0
     
-
-async def detect_and_attack(number_of_seconds):
-    t_end = time() + number_of_seconds
-    while time() > number_of_seconds:
-        pic = pg.screenshot(region=cvars.region)
-        width, height = pic.size
-        await asyncio.sleep(0.5)
-        for x in range(0, width, 3):
-            for y in range(0, height, 3):
-                r, g, b = pic.getpixel((x, y))
-                if (b in range(0, 10)) and (r in range(200, 255)) and (g in range(0, 10)):
-                    await left_click(x + target['x'], y + target['y'])
-                    await right_click(x + target['x'], y + target['y'])
-                    press('f')
-                    print('call me ishmael')
-                    await asyncio.sleep(0.22)
-    return 0
-
-
+# resets the seed
 async def vote_reset():
     press("escape")
     await asyncio.sleep(0.8)
@@ -98,14 +68,7 @@ async def vote_reset():
     await left_click(cvars.reset_coord["x"], cvars.reset_coord["y"])
     await asyncio.sleep(6)
     
-async def roam_then_attack_strategy():
-    iteration = 1 
-    attack_task = asyncio.create_task(detect_and_attack())
-    background_tasks.add(attack_task)
-    attack_task.add_done_callback(background_tasks.discard)
-    await widening_circle(uniform(0,2)+ iteration)
-    iteration += 1
-
+# here are different common places to gain exp/gold. i've also introduced a random map.
 async def fields_of_battle():
     press('d', interval = .2, presses = 2)
     press('f')
@@ -140,6 +103,7 @@ async def to_battle():
     if g == 4:
         await pyramid_2()
 
+# ctrl-C doesn't always like to work. probably asyncio's fault. here's how we quit
 def on_press(key):
     quit_char = KeyCode.from_char('[')
     if key == quit_char:
@@ -156,7 +120,8 @@ async def main():
         i = 1
         flag = 0
         while 1:
-            waypoint = pg.locateCenterOnScreen(r'D:\herobot\assets\waypoint_b.png', grayscale=True,confidence = 0.4)
+            # for whatever reason, absolute reference seems to be required here
+            waypoint = pg.locateCenterOnScreen(r'D:\hero-bot\assets\waypoint_b.png', grayscale=True,confidence = 0.4)
             end_time = time() + uniform(40, 50)
             if waypoint:
                 flag = 0
@@ -175,7 +140,6 @@ async def main():
                     await widening_circle(uniform(0,1))
                     await shrinking_circle(uniform(0,1))
                 else:
-                    detect_and_attack(5)
                     await asyncio.sleep(0.6)
                     print(f'think not, is my {num2words(i-1, to = "ordinal")} commandment; and sleep when you can, is my {num2words(i, to = "ordinal")}')
                     await vote_reset()              
@@ -186,6 +150,7 @@ async def main():
                 print('i only am escaped alone to tell thee')
                 await vote_reset()
 
+# easy instant process kill
 while 1:
     with Listener(
             on_press=on_press,
